@@ -11,16 +11,34 @@ from functools import partial
 from PIL import Image
 import scipy as sp
 import functools, time
+import pickle
 import albumentations as A
-from torch.nn.parameter import Parameter
-from albumentations.core.transforms_interface import DualTransform
-from torch.nn.utils import spectral_norm
-from pytorch_lightning.core.lightning import LightningModule
-from pytorch_lightning import Trainer
-from pytorch_lightning.metrics.functional import accuracy
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 
+duplicates = pickle.load('duplicates.pkl')
 
 df = pd.read_csv('../input/prostate-cancer-grade-assessment/train.csv')
 df['data_provider'] = df['data_provider'].replace({'karolinska':0, 'radbound':1})
-dic = pd.DataFrame(df['gleason_s
+df['gleason_score'] = df['gleason_score'].replace({'negative': '0+0'})
+dic = pd.DataFrame(df['gleason_score'].value_counts()).to_dict()['gleason_score']
+s = sorted(dic.keys())
+df['gleason_score'] = df['gleason_score'].replace({i:s.index(i) for i in s})
+
+idxs = []
+for i, j in duplicates:
+    idxs.append(df[df['image_id']==i].index)
+
+def create_folds(n):
+    print('preparing folds')
+    df = df.drop(idxs)
+    kfs = StratifiedKFold(df, df['isup_grade'])
+    dist_train, dist_valid = [], []
+    for fold, (train_ids, valid_ids) in enumerate(kfs.split(df['image_id'], df['isup_grade'])):
+        train, valid = df.iloc[train_ids, :], df.iloc[valid_ids, :]
+        dist_train.append(train['isup_grade'].value_counts().values)
+        dist_valid.append(valid['isup_grade'].value_counts().values)
+        train.to_pickle(f'../data/train_{fold}.pkl')
+        valid_to_pickle(f'../data/valid_{fold}.pkl')
+    print(dist_train, dist_valid)
+
+
+
