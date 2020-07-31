@@ -43,5 +43,11 @@ for i,j in zip(*duplicates):
 
     pairs.append((train_fs[i], train_fs[j]))
 
+idxs = []
+for i, _ in pairs:
+    idxs.append(df[df['image_id']== i].index)
+
 with open('duplicates.pkl', 'wb') as f:
-    pickle.dump(pairs, f)
+    pickle.dump(idxs, f)
+
+
