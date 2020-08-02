@@ -168,7 +168,7 @@ def accuracy(out, yb):
 
 def get_dl(df, bs=8, train=True):
     ds = PandaDataset(df)
-    return DataLoader(ds, shuffle=True, batch_size=bs, num_workers=4)
+    return DataLoader(ds, shuffle=True if train else False, batch_size=bs, num_workers=4)
 
 
 class Model(nn.Module):
@@ -279,3 +279,28 @@ run(1)
 run(2)
 run(3)
 run(4)
+
+cleaned_preds = pd.DataFrame(columns=['image_id', 'isup_grade', 'conf_perc'])
+
+for val in range(5):
+    model = get_base()
+    model.load_state_dict(torch.load('../model/model_{val}.bin'))
+    val_df = pd.read_pickle(f'../working/valid_{fold}.pkl')
+    indices_acc, conf_perc_acc = [], []
+    with torch.no_grad():
+        for bi, (xb, yb) in enumerate(get_dl(val_df, 8, train=False)):
+            x = x.cuda()
+            x = torch.stack([x, x.flip(-1), x.flip(-2), x.flip(-1, -2),
+                x.transpose(-1, -2), x.transpose(-1, -2).flip(-1),
+                x.transpose(-1, -2).flip(-2), x.transpose(-1, -2).flip(-1, -2)], 1)
+            x = x.view(-1, N, 3, sz, sz)
+            p = model(x)
+            vals, indices = torch.max(torch.softmax(p), axis=1)
+            conf_perc_acc.append(vals.detach().cpu().numpy().tolist())
+            indices_acc.append(indices.detach().cpu().numpy().tolist())
+    temp_df = pd.DataFrame({'image_id': val_df['image_id'], 'isup_grad':np.array(indices), 'conf_perc':
+        np.array(conf_perc)})
+    cleaned_preds = cleaned_preds.append(temp_df, ignore_index=True)
+
+cleaned_preds.to_csv('../data/cleaned_preds.csv', index=False)
+
